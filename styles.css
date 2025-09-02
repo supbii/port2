@@ -1,0 +1,345 @@
+/* ========== Base ========== */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html, body { margin: 0; padding: 0; height: 100%; }
+
+/* 스크롤 제거(요구사항) */
+html, body { overflow: hidden; }
+
+body {
+  font-family: system-ui, -apple-system, "Noto Sans KR", sans-serif;
+  color:#111;
+  background:#fafafa;
+  position: relative;
+  overflow-x: hidden;
+}
+
+h1,h2,p { margin: 0 0 .5rem; }
+
+/* 안전 여백/푸터 높이 변수 */
+:root{
+  --footer-h: 64px;     /* 고정 푸터 높이 */
+  --safe-top: 140px;    /* 타이틀/힌트/프로그레스 영역 여유 */
+}
+
+/* ========== 배경 스택(화면 전체) ========== */
+#bgStack{
+  position: fixed;
+  inset: 0;
+  z-index: 0;           /* UI 아래 */
+  pointer-events: none; /* 클릭 통과 */
+  isolation: isolate;   /* 혼합컨텍스트 분리 → blend 확실 */
+}
+
+/* 0: 배경 이미지 (전체 화면) */
+#bgLayer{
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  z-index: 0;
+  background: #000;
+  background-image: url('background.png'); /* ← 경로 교체 */
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* 1: 회색 오버레이 (multiply) */
+#screenOverlay{
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: rgb(113, 113, 113);
+  mix-blend-mode: multiply;   /* 필요 시 darken */
+  pointer-events: none;
+}
+
+/* ========== UI 레이아웃 ========== */
+.ui-root{
+  position: relative;
+  z-index: 2;                 /* 배경/오버레이 위 */
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Header (상단, 투명+블러) */
+.site-header{
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  text-align:center;
+  box-sizing:border-box;
+  padding:16px 12px; /* 필요시 조정 */
+
+  width: 100%;
+  padding: 1rem;
+
+  /* 반투명 + 블러 (배경이 비치도록) */
+  background: rgba(245,245,245,0.7);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  background-clip: padding-box;      /* 블러 가장자리 깔끔하게 */
+  border-bottom: 1.5px solid rgba(255,255,255,0.85);
+  z-index: 3;                 /* 본문 위로 */
+}
+.brand { font-weight: 700; color:#111; }
+.tagline { color:#555; }
+
+.site-header .brand{ margin:0; }
+.site-header .brand.is-hidden{ display:none; } /* 문구2일 때 브랜드 숨김 */
+.site-header .tagline{
+  margin:.25rem 0 0;
+  line-height:1.5;
+  max-width:960px;     /* 여러 줄 줄바꿈 폭 고정 */
+  min-height:1.5em;    /* 미세한 수축 방지(선택) */
+}
+
+/* Main */
+.app{
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1rem;
+  padding-bottom: calc(var(--footer-h) + 8px); /* 푸터에 가리지 않게 */
+  flex: 1;
+  overflow: hidden;             /* 내부 스크롤 제거 */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;      /* 라디얼 세로 중앙 */
+}
+
+/* Footer (하단 고정, 블러 없음 / 투명도만 원하면 rgba 조절) */
+.site-footer{
+  position: fixed;
+  bottom: 0; left: 0; width: 100%;
+  padding: 1rem;
+  text-align: center;
+  background: rgba(245,245,245,0.90);
+  z-index: 3;
+  min-height: var(--footer-h);
+}
+
+/* ========== 진행 상태 ========== */
+.progress{ display:flex; justify-content:center; padding: 1rem 0; }
+.progress__dots{ list-style:none; display:flex; gap:.5rem; padding:0; margin:0; }
+.progress__dots li{ width:10px; height:10px; border-radius:50%; background:#d6d6d6; transition:transform .2s; }
+.progress__dots li.is-active{ background:#111; transform: scale(1.2); }
+.progress__dots li.is-done{ background:#999; }
+
+/* ========== 타이틀/힌트(항상 보이게) ========== */
+.step__title{
+  font-size: 1.25rem;
+  margin-bottom: .25rem;
+  color:#fff;
+  position: relative; z-index: 2;
+}
+.step__hint{
+  color: rgba(255,255,255,0.85);
+  margin-bottom: 1rem;
+  position: relative; z-index: 2;
+}
+
+/* ========== 라디얼(파이) ========== */
+/* 화면이 작아질 때 라디얼이 먼저 줄어 타이틀/힌트가 안 잘리게 */
+.radial{
+  --radial-max: 520px;
+  --radial-by-vw: 80vw;
+  --radial-by-vh: calc(100vh - var(--footer-h) - var(--safe-top));
+  width:  min(var(--radial-max), var(--radial-by-vw), var(--radial-by-vh));
+  height: min(var(--radial-max), var(--radial-by-vw), var(--radial-by-vh));
+  margin: 0 auto 1rem;
+  position: relative;
+}
+.radial svg{ width: 100%; height: 100%; display:block; }
+
+/* 얇은 분할선 */
+.sep-line{ stroke:#fff; stroke-width:1; opacity:.35; }
+
+/* (선택) 도넛 뒤 개별 오버레이가 필요하면 사용 */
+.radial__overlay{
+  position:absolute; inset:0; border-radius:50%;
+  background:#2a2a2a; mix-blend-mode:multiply;
+  pointer-events:none; z-index:0;
+}
+
+/* ========== 파이 인터랙션 ========== */
+.slice-group{ cursor: pointer; }
+
+/* 밝아지는 면(hover/selected 시 활성) */
+.slice-fill{
+  fill:#fff;
+  opacity:0;                    /* 기본 0 */
+  mix-blend-mode: screen;
+  transition: opacity .15s ease;
+  pointer-events:none;
+}
+
+/* 점선 테두리 */
+.slice-stroke{
+  fill:transparent;
+  stroke: rgba(255,255,255,0.65);
+  stroke-width:2;
+  stroke-dasharray:10 8;
+  stroke-linecap: round;
+  transition: stroke .15s, stroke-width .15s, filter .15s, opacity .15s;
+}
+
+/* Hover 효과 */
+.slice-group:hover .slice-stroke{
+  stroke:#fff;
+  stroke-width:3.5;
+  filter: drop-shadow(0 0 2px rgba(255,255,255,0.6));
+}
+.slice-group:hover .slice-fill{ opacity:.20; }
+
+/* 선택 효과 */
+.slice-group.is-selected .slice-stroke{ stroke:#fff; stroke-width:3.5; }
+.slice-group.is-selected .slice-fill{ opacity:.24; }
+
+/* ========== 버튼/네비 ========== */
+.nav{ display:flex; justify-content:center; gap:.5rem; }
+.btn{ padding:.6rem 1rem; border:1px solid #ddd; background:#fff; border-radius:6px; cursor:pointer; }
+.btn-primary{ background:#111; color:#fff; border-color:#111; }
+.btn:disabled{ opacity:.5; cursor:not-allowed; }
+
+/* ========== 요약(선택적으로 사용) ========== */
+.summary.hidden{ display:none; }
+.summary__list{ list-style:none; padding:0; margin:.5rem auto 1rem; max-width:520px; }
+.summary__list li{
+  padding:.6rem .8rem; margin:.4rem 0;
+  background:#fff; border:1px solid #eee; border-radius:6px;
+  display:flex; justify-content:space-between;
+}
+
+/* Tooltip */
+.tooltip {
+  position: fixed;
+  z-index: 9999;
+  max-width: 220px;
+  padding: .5rem .65rem;
+  font-size: .9rem;
+  line-height: 1.35;
+  color: #fff;
+  background: rgba(20,20,20,.9);
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 8px;
+  pointer-events: none;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  transform: translate(12px, -8px); /* 커서 오른쪽 살짝 위 */
+}
+
+/* 사이드 패널 공통 */
+.side-tip{
+  width: 260px; min-height: 120px;
+  border: 1px solid #eee; border-radius: 10px;
+  background: #fff; padding: 16px; box-shadow: 0 6px 20px rgba(0,0,0,.06);
+  opacity: 0; transform: translateY(6px); transition: opacity .18s ease, transform .18s ease;
+  pointer-events: none; /* 고정 패널: hover 구속 방지 */
+  display: none; /* 기본 숨김 */
+}
+.side-tip.is-show{ display:block; opacity:1; transform: translateY(0); }
+.side-tip h4{ margin:0 0 6px; font-size:14px; font-weight:700; color:#111; }
+.side-tip p{ margin:0; font-size:13px; line-height:1.5; color:#333; }
+
+/* 반응형: 좁은 화면에선 패널 숨기고 아래로 */
+@media (max-width: 880px){
+  .radial-row{ flex-direction: column; align-items: stretch; }
+  .side-tip{ width: 100%; }
+}
+
+/* 라디얼 컨테이너는 인라인 렌더 기준 */
+#radialContainer {
+  position: relative;
+  display: flex;            /* JS에서도 보정하지만, 기본값 통일 */
+  justify-content: center;
+  align-items: center;
+  min-height: 0;            /* 의도치 않은 높이 제거 */
+  padding: 0;
+}
+
+/* SVG 내부 텍스트가 클릭을 가로채지 않게 */
+#radialContainer svg text { pointer-events: none; }
+
+/* ───── 악기 설문(그리드) — 투명 배경 + 점선 테두리 + 호버 하이라이트 ───── */
+.instrument-section { 
+  margin: 0 auto;
+  background: transparent;
+}
+
+.instrument-title { display: none; }   /* ★ 제목 제거 */
+
+.instrument-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;                 /* ★ 틈 완전 제거 */
+  margin: 0;              /* 바깥 여백 제거 */
+  padding: 0;             /* 안쪽 여백 제거 */
+  width: 100%;
+}
+
+.instrument-grid .option {
+  --accent: rgba(255,255,255,.22);
+  display: block;
+  width: 100%; 
+  background: transparent;
+  border: 1.8px dashed rgba(255,255,255,.65);
+  color: #fff;
+  border-radius: 0;       /* ★ 서로 붙었을 때 이음매 깔끔 */
+  padding: 1rem;
+  text-align: center;
+  cursor: pointer;
+  user-select: none;
+  margin: 0;              /* ★ 기본 margin 제거 */
+  transition: background .15s ease, border-color .15s ease, box-shadow .15s ease, transform .04s ease;
+  outline: none;
+}
+
+.instrument-grid .option:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-color: #fff;
+  box-shadow: 0 0 0 2px rgba(255,255,255,.08) inset, 0 0 2px rgba(255,255,255,.6);
+}
+
+.instrument-grid .option:active { transform: translateY(1px); }
+
+.instrument-grid .option.is-selected {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  border-style: solid;
+  border-color: #fff;
+  box-shadow: 0 0 0 2px rgba(255,255,255,.1) inset;
+}
+
+.instrument-grid .option:focus-visible { box-shadow: 0 0 0 3px rgba(255,255,255,.35); }
+
+/* 좁은 화면은 2열 — 여전히 gap 0 유지 */
+@media (max-width: 640px) {
+  .instrument-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+  }
+}
+
+.instrument-grid .option.is-hover { 
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-color: #fff;
+  box-shadow: 0 0 0 2px rgba(255,255,255,.08) inset, 0 0 2px rgba(255,255,255,.6);
+}
+
+.result-section .nav {
+  margin-bottom: 2rem; /* 푸터와 버튼 사이 여백 */
+}
+
+/* 2번 문구일 때 브랜드 숨김 */
+.site-header .brand.is-hidden { display: none; }
+/* 2번 문구는 두 줄이라 조금 넓게/중앙 정렬 */
+.site-header .tagline.is-long {
+  max-width: 960px;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
+  line-height: 1.5;
+}

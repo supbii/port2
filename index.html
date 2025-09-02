@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PORTATO — 나만의 클래식, 우리의 무대</title>
+  <link rel="stylesheet" href="styles.css" />
+  <meta name="description" content="당신이 고른 장소, 무드, 관람 방식, 여운까지. 한 장면의 클래식 공연을 상상하고 선택해 보세요. 선택은 결과 페이지에서 그래픽으로 시각화되어 아카이브로 이어집니다.">
+</head>
+<body>
+  <!-- 배경 스택: 배경 + 오버레이 -->
+  <div id="bgStack" aria-hidden="true">
+    <div id="bgLayer"></div>
+    <div id="screenOverlay"></div>
+  </div>
+
+  <!-- UI -->
+  <div class="ui-root">
+    <!-- 고정 헤더 -->
+    <header class="site-header">
+      <h1 class="brand">PORTATO — 자유로운 클래식, 우리의 무대</h1>
+      <p class="tagline">
+        딱딱한 형식을 벗어나, 각자의 상상으로 공연을 엿보는 시간.
+      </p>
+    </header>
+
+    <main id="app" class="app">
+      <nav class="progress" aria-label="선택 단계">
+        <ol id="stepDots" class="progress__dots"></ol>
+      </nav>
+
+      <!-- 단계 컨테이너 -->
+      <section class="step" aria-live="polite">
+        <h2 id="stepTitle" class="step__title">단계 제목</h2>
+        <p id="stepHint" class="step__hint">간단 설명</p>
+
+        <!-- 원형 라디얼 셀렉터 (app.js가 주입) -->
+        <div class="radial" id="radialContainer" role="group" aria-labelledby="stepTitle"></div>
+        <!-- 악기 그리드가 필요한 단계에서 app.js가 동적으로 삽입합니다 -->
+        <div id="gridMount"></div>
+
+        <!-- 내비게이션 -->
+        <div class="nav" aria-label="이전">
+          <button id="btnPrev" class="btn" type="button">이전</button>
+        </div>
+      </section>
+
+      <!-- (요약 섹션은 result 페이지로 이동하므로 기본은 숨김) -->
+      <section id="summary" class="summary hidden" aria-live="polite">
+        <h2 class="step__title">선택 요약</h2>
+        <ul id="summaryList" class="summary__list"></ul>
+        <div class="nav">
+          <button id="btnRestart" class="btn" type="button">처음부터</button>
+          <a class="btn btn-primary" href="result.html" id="goResult">결과 보러가기</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <small>© 2025 PORTATO</small>
+    </footer>
+  </div>
+
+  <!-- 앱 스크립트 -->
+  <script src="app.js" defer></script>
+</body>
+</html>

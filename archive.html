@@ -1,0 +1,301 @@
+<!-- archive.html -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>PORTATO — 아카이브</title>
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+        .archive-wrap{ max-width: 1100px; margin: 0 auto; padding: 1rem 1rem 5rem; }
+        .archive-head{ text-align:center; color:#fff; margin: .5rem 0 1.5rem; }
+        .archive-head .step__hint{ font-size:1rem; line-height:1.6; opacity:.9; }
+
+        .archive-grid{
+        display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 14px;
+        }
+        .card{
+        position: relative; background: rgba(255,255,255,.06);
+        border: 1px solid rgba(255,255,255,.15);
+        border-radius: 10px; overflow: hidden; transition: transform .12s ease, box-shadow .12s ease;
+        cursor: pointer;
+        }
+        .card:hover{ transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+        .card img{ width: 100%; height: 160px; object-fit: cover; display:block; }
+        .card .meta{ padding: .6rem .7rem; color:#fff; font-size:.9rem; line-height:1.3; }
+        .card.is-new::after{
+        content:"NEW"; position:absolute; top:8px; left:8px; font-size:.7rem; font-weight:700;
+        background:#111; color:#fff; padding:.15rem .4rem; border-radius: 999px; border:1px solid #fff;
+        }
+        .archive-actions{ display:flex; gap:.5rem; justify-content:center; margin:1rem 0; }
+        .archive-empty{ color:#fff; text-align:center; opacity:.8; margin:2rem 0; }
+
+        /* 모달(상세 보기) */
+        .modal{ position: fixed; inset:0; background: rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; z-index:20; }
+        .modal.is-open{ display:flex; }
+        .modal__panel{ width:min(1000px, 96vw); background: rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.18);
+        border-radius:12px; overflow:hidden; }
+        .modal__head{ display:flex; justify-content:space-between; align-items:center; padding:.75rem 1rem; color:#fff; border-bottom:1px solid rgba(255,255,255,.12); }
+        .modal__body{ padding: .75rem; }
+        .modal__canvas{
+        position:relative; margin:0 auto; background:transparent;
+        border:1px dashed rgba(255,255,255,.18); border-radius:12px;
+        overflow:hidden;
+        }
+        .modal__canvas img{ position:absolute; display:block; object-fit:contain; pointer-events:none; }
+        .modal__footer{ display:flex; justify-content:flex-end; gap:.5rem; padding: .75rem; border-top:1px solid rgba(255,255,255,.12); }
+    </style>
+    </head>
+    <body>
+    <!-- 배경 -->
+    <div id="bgStack"><div id="bgLayer"></div><div id="screenOverlay"></div></div>
+
+    <div class="ui-root">
+        <header class="site-header">
+        <h1 class="brand">PORTATO</h1>
+        <p class="tagline">아카이브</p>
+        </header>
+
+        <main class="app" style="overflow:auto;">
+        <section class="archive-wrap">
+            <div class="archive-head">
+            <h2 class="step__title">포르타토 아카이브</h2>
+            <p class="step__hint">
+                이곳은 여러 사람이 상상한 공연의 순간들을 한눈에 모아둔 공간입니다.<br>
+                직관적으로 다양한 공연 장면을 둘러보며, 당신의 선택도 그 속에서 발견할 수 있습니다.<br>
+                클래식을 즐기는 방식이 다르더라도, 여기서는 느슨한 연대 속에 모두가 연결됩니다.
+            </p>
+            </div>
+
+            <div class="archive-actions">
+            <a class="btn" href="index.html">새로 만들기</a>
+            <button class="btn" id="btnClear">모두 삭제</button>
+            </div>
+
+            <div id="grid" class="archive-grid"></div>
+            <div id="empty" class="archive-empty" style="display:none;">아직 저장된 결과가 없습니다.</div>
+        </section>
+        </main>
+
+        <footer class="site-footer"><small>© 2025 PORTATO</small></footer>
+    </div>
+
+    <!-- 상세 모달 -->
+    <div id="modal" class="modal">
+        <div class="modal__panel">
+        <div class="modal__head">
+            <strong id="modalTitle">상세</strong>
+            <div>
+            <button class="btn" id="btnDeleteOne">삭제</button>
+            <button class="btn btn-primary" id="btnClose">닫기</button>
+            </div>
+        </div>
+        <div class="modal__body">
+            <div id="modalCanvas" class="modal__canvas"></div>
+            <div id="modalInfo" style="color:#fff; margin-top:.6rem; font-size:.95rem;"></div>
+        </div>
+        <div class="modal__footer">
+            <button class="btn" id="btnDownload">PNG로 저장</button>
+        </div>
+        </div>
+    </div>
+
+    <script>
+    const ARCHIVE_KEY = "portato_archive_v1";
+    const DEMO_SEED = true;
+
+    const DEMO_ENTRIES = [
+        {
+        sel:{place:"field",mood:"classical",flow:"sit",extras:"tea",instruments:["바이올린"]},
+        box:{w:800,h:420},
+        images:[
+            {key:"place:field",src:"assets/place/field.png"},
+            {key:"mood:classical",src:"assets/mood/classical.png"},
+            {key:"flow:sit",src:"assets/flow/sit.png"},
+            {key:"extras:tea",src:"assets/extras/tea.png"},
+            {key:"instruments:바이올린",src:"assets/instruments/violin.png"}
+        ]
+        },
+        {
+        sel:{place:"forest",mood:"impressionist",flow:"walk",extras:"talk",instruments:["클라리넷","첼로"]},
+        box:{w:900,h:420},
+        images:[
+            {key:"place:forest",src:"assets/place/forest.png"},
+            {key:"mood:impressionist",src:"assets/mood/impressionist.png"},
+            {key:"flow:walk",src:"assets/flow/walk.png"},
+            {key:"extras:talk",src:"assets/extras/talk.png"},
+            {key:"instruments:클라리넷",src:"assets/instruments/clarinet.png"},
+            {key:"instruments:첼로",src:"assets/instruments/cello.png"}
+        ]
+        }
+    ];
+
+    const grid = document.getElementById('grid');
+    const empty = document.getElementById('empty');
+    const modal = document.getElementById('modal');
+    const modalCanvas = document.getElementById('modalCanvas');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalInfo  = document.getElementById('modalInfo');
+    const btnClose = document.getElementById('btnClose');
+    const btnDeleteOne = document.getElementById('btnDeleteOne');
+    const btnClear = document.getElementById('btnClear');
+    const btnDownload = document.getElementById('btnDownload');
+
+    let data = loadArchive();
+    const highlightId = new URLSearchParams(location.search).get('id');
+
+    if (!data.length && DEMO_SEED) {
+        data = DEMO_ENTRIES.map((d,i)=>({
+        id:`demo_${Date.now()}_${i}`,
+        t: Date.now()- (i+1)*100000,
+        ...d,
+        layout: autoLayoutFor(d.images, d.box),
+        thumb: null
+        }));
+        saveArchive(data);
+    }
+
+    renderGrid();
+
+    // 이벤트
+    btnClose.addEventListener('click', ()=> modal.classList.remove('is-open'));
+    btnClear.addEventListener('click', ()=>{
+        if (!confirm('정말 모두 삭제할까요?')) return;
+        localStorage.removeItem(ARCHIVE_KEY);
+        data = [];
+        renderGrid();
+    });
+
+    let openedId = null;
+    btnDeleteOne.addEventListener('click', ()=>{
+        if (!openedId) return;
+        if (!confirm('이 항목을 삭제할까요?')) return;
+        data = data.filter(d=>d.id !== openedId);
+        saveArchive(data);
+        modal.classList.remove('is-open');
+        renderGrid();
+    });
+
+    btnDownload.addEventListener('click', ()=>{
+        if (!openedId) return;
+        const d = data.find(x=>x.id===openedId);
+        if (!d) return;
+        rasterizeFromDefinition(d).then((url)=>{
+        const a = document.createElement('a');
+        a.href = url; a.download = `${openedId}.png`;
+        a.click();
+        });
+    });
+
+    function loadArchive(){
+        try { return JSON.parse(localStorage.getItem(ARCHIVE_KEY) || "[]"); }
+        catch(e){ return []; }
+    }
+    function saveArchive(arr){ localStorage.setItem(ARCHIVE_KEY, JSON.stringify(arr)); }
+
+    function renderGrid(){
+        grid.innerHTML = '';
+        empty.style.display = data.length ? 'none' : 'block';
+        data
+        .slice()
+        .sort((a,b)=>b.t-a.t)
+        .forEach(entry=>{
+            const card = document.createElement('article');
+            card.className = 'card';
+            if (entry.id === highlightId) card.classList.add('is-new');
+
+            const img = document.createElement('img');
+            img.src = entry.thumb || (entry.images[0] ? entry.images[0].src : '');
+
+            const meta = document.createElement('div');
+            meta.className = 'meta';
+            meta.innerHTML = `
+            <div style="font-weight:700;">${formatSentence(entry.sel)}</div>
+            <div style="opacity:.85;font-size:.85rem;margin-top:.25rem;">${new Date(entry.t).toLocaleString()}</div>
+            `;
+
+            card.appendChild(img);
+            card.appendChild(meta);
+            card.addEventListener('click', ()=> openDetail(entry));
+            grid.appendChild(card);
+        });
+    }
+
+    function openDetail(entry){
+        openedId = entry.id;
+        modalTitle.textContent = "상세 보기";
+        modalInfo.innerHTML = `
+        <div>${formatSentence(entry.sel)}</div>
+        <div style="opacity:.85;margin-top:.25rem;">${new Date(entry.t).toLocaleString()}</div>
+        `;
+
+        modalCanvas.innerHTML = '';
+        modalCanvas.style.width  = (entry.box?.w || 800) + 'px';
+        modalCanvas.style.height = (entry.box?.h || 420) + 'px';
+
+        if (entry.images && entry.layout) {
+        entry.images.forEach(imgDef=>{
+            const r = entry.layout[imgDef.key];
+            if (!r) return;
+            const im = document.createElement('img');
+            im.src = imgDef.src; im.alt = '';
+            im.style.left = r.left + 'px';
+            im.style.top  = r.top  + 'px';
+            im.style.width  = r.width  + 'px';
+            im.style.height = r.height + 'px';
+            modalCanvas.appendChild(im);
+        });
+        }
+        modal.classList.add('is-open');
+    }
+
+    function formatSentence(sel){
+        const P = {
+        place:{ field:"들판에서", forest:"숲속에서", lake:"계곡에서", sea:"바닷가에서" },
+        mood:{ classical:"우아하고 정제된 선율로", romantic:"드라마틱한 감정의 무드로", impressionist:"몽환적 음색의 무드로", neoclassical:"자유로운 형식의 무드로" },
+        flow:{ lie:"편안히 누워 감상하고,", sit:"자유롭게 앉아 집중하며,", walk:"좌석에서 몰입하며,", scatter:"가볍게 움직이며 공간을 탐색하고," },
+        extras:{ talk:"연주자와의 대화를 통해", tea:"다과와 담소로 여운을 이어가며", instrument:"체험 부스를 거쳐", campfire:"캠프파이어로 마무리하며" }
+        };
+        return `<strong>${P.place[sel.place]||"어느 공간에서든"}</strong> <strong>${P.mood[sel.mood]||"당신만의 무드로"}</strong> <strong>${P.flow[sel.flow]||"편안한 방식으로"}</strong> <strong>${P.extras[sel.extras]||"여운을 오래 간직하며"}</strong> 당신의 포르타토 공연을 즐깁니다.`;
+    }
+
+    function autoLayoutFor(images, box){
+        const out = {};
+        const colW = Math.min(320, Math.floor((box.w - 16*3)/2));
+        images.forEach((img, idx)=>{
+        const col = idx % 2, row = Math.floor(idx/2);
+        const left = 16 + col * (colW + 16);
+        const width = colW, height = Math.round(colW * 0.6);
+        const top  = 16 + row * (height + 16);
+        out[img.key] = { left, top, width, height };
+        });
+        return out;
+    }
+
+    function rasterizeFromDefinition(entry){
+        return new Promise(resolve=>{
+        const w = entry.box?.w || 800;
+        const h = entry.box?.h || 420;
+        const cvs = document.createElement('canvas');
+        cvs.width = w; cvs.height = h;
+        const ctx = cvs.getContext('2d');
+
+        const imgs = (entry.images||[]).map(imgDef=>{
+            const r = entry.layout?.[imgDef.key];
+            return r ? {src:imgDef.src, rect:r} : null;
+        }).filter(Boolean);
+
+        (function drawSeq(i){
+            if (i >= imgs.length) { resolve(cvs.toDataURL('image/png')); return; }
+            const it = imgs[i];
+            const im = new Image();
+            im.onload = ()=>{ try{ ctx.drawImage(im, it.rect.left, it.rect.top, it.rect.width, it.rect.height); }catch(e){}; drawSeq(i+1); };
+            im.onerror = ()=> drawSeq(i+1);
+            im.src = it.src;
+        })(0);
+        });
+    }
+    </script>
+</body>
+</html>

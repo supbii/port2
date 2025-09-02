@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PORTATO — 추천 결과</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- 배경 -->
+  <div id="bgStack"><div id="bgLayer"></div><div id="screenOverlay"></div></div>
+
+  <div class="ui-root">
+    <header class="site-header">
+      <h1 class="brand">PORTATO</h1>
+      <p class="tagline">당신만의 공연 상상</p>
+    </header>
+
+    <main class="app">
+      <section class="result-section" style="text-align:center;">
+        <h2 class="step__title">당신의 포르타토 공연</h2>
+        <p class="step__hint">
+          지금까지의 선택으로 완성된 당신만의 클래식 공연 장면입니다.<br>
+          이미지를 움직여 자유롭게 구도를 바꿀 수도 있고,<br>
+          원하는 순간을 저장해 나만의 기록으로 남겨보세요.
+        </p>
+
+        <div id="resultOutput" style="margin:2rem 0; color:#fff; font-size:1.1rem;"></div>
+
+        <div class="nav">
+          <!-- JS가 '배치 초기화', '저장하고 아카이빙 보기' 버튼을 추가 -->
+          <button class="btn btn-primary" onclick="restart()">다시 선택하기</button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer"><small>© 2025 PORTATO</small></footer>
+  </div>
+
+<script>
+/* ================= 공용 상수/설정 (전역) ================= */
+const PHRASE = {
+  place:{ field:"들판에서", forest:"숲속에서", lake:"계곡에서", sea:"바닷가에서" },
+  mood:{ classical:"우아하고 정제된 선율로", romantic:"드라마틱한 감정의 무드로", impressionist:"몽환적 음색의 무드로", neoclassical:"자유로운 형식의 무드로" },
+  flow:{ lie:"편안히 누워 감상하고,", sit:"자유롭게 앉아 집중하며,", walk:"좌석에서 몰입하며,", scatter:"가볍게 움직이며 공간을 탐색하고," },
+  extras:{ talk:"연주자와의 대화를 통해", tea:"다과와 담소로 여운을 이어가며", instrument:"체험 부스를 거쳐", campfire:"캠프파이어로 마무리하며" }
+};
+
+const IMG_MAP = {
+  place:{ field:"assets/field.png", forest:"assets/forest.png", lake:"assets/lake.png", sea:"assets/sea.png" },
+  mood:{ classical:"assets/classical.png", romantic:"assets/romantic.png", impressionist:"assets/impressionist.png", neoclassical:"assets/neoclassical.png" },
+  flow:{ lie:"assets/lie.png", sit:"assets/sit.png", walk:"assets/walk.png", scatter:"assets/scatter.png" },
+  extras:{ talk:"assets/talk.png", tea:"assets/tea.png", instrument:"assets/instrument.png", campfire:"assets/campfire.png" },
+  instruments:{
+    "바이올린":"assets/instruments/violin.png","비올라":"assets/instruments/viola.png","첼로":"assets/instruments/cello.png",
+    "콘트라베이스":"assets/instruments/contrabass.png","클라리넷":"assets/instruments/clarinet.png","플룻":"assets/instruments/flute.png",
+    "트럼펫":"assets/instruments/trumpet.png","트롬본":"assets/instruments/trombone.png","호른":"assets/instruments/horn.png"
+  }
+};
+const INSTR_ALIAS = { "트럼본":"트롬본", "플루트":"플룻" }; // 표기 표준화
+
+const CLAMP_PAD = 8;                             // 경계 여유(네 변 공통)
+const CANVAS_VW   = 0.92; // 너비: viewport의 92%
+const CANVAS_VH   = 0.55; // 높이: viewport의 55%
+const CANVAS_MAX_W = 1200;
+const CANVAS_MIN_H = 300;
+
+/* 그룹별 사이즈 모드/비율 */
+const SIZE_MODE = { place:'w', mood:'w', flow:'w', extras:'w', instruments:'longer' };
+const WIDTH_FRAC  = { place:0.22, mood:0.28, flow:0.20, extras:0.20, instruments:0.18 };
+const HEIGHT_FRAC = { place:0.22, mood:0.22, flow:0.20, extras:0.20, instruments:0.26 };
+
+const PAD = 16, GAP = 16;                       // 내부 여백/간격
+const POS_KEY = "portato_result_layout_pos_v1"; // 좌표만 저장
+
+/* ================= 유틸/레이아웃 함수 ================= */
+function setRect(el, l,t,w,h){
+  el.style.left   = Math.round(l) + "px";
+  el.style.top    = Math.round(t) + "px";
+  el.style.width  = Math.round(w) + "px";
+  el.style.height = Math.round(h) + "px";
+}
+
+function snapshotPositions(elems){
+  const out={};
+  elems.forEach(el=>{
+    out[el.getAttribute("data-key")] = {
+      left: parseInt(el.style.left||"0",10),
+      top:  parseInt(el.style.top ||"0",10)
+    };
+  });
+  return out;
+}
+
+function snapshotLayout(elems){
+  const out={};
+  elems.forEach(el=>{
+    out[el.getAttribute("data-key")] = {
+      left: parseInt(el.style.left||"0",10),
+      top:  parseInt(el.style.top ||"0",10),
+      width: el.offsetWidth, height: el.offsetHeight
+    };
+  });
+  return out;
+}
+
+/* 그룹별 목표 사이즈 계산 */
+function desiredSize(def, cW, cH){
+  const mode = SIZE_MODE[def.group] || 'w';
+  const wf = Math.max(0.05, WIDTH_FRAC[def.group]  ?? 0.25);
+  const hf = Math.max(0.05, HEIGHT_FRAC[def.group] ?? 0.25);
+  const natW = def.natW || 800, natH = def.natH || 600;
+  let w, h;
+
+  if (mode === 'w') {
+    w = Math.min(Math.round(cW * wf), Math.max(60, cW - PAD*2));
+    h = Math.round(natH * (w / natW));
+  } else if (mode === 'h') {
+    h = Math.min(Math.round(cH * hf), Math.max(60, cH - PAD*2));
+    w = Math.round(natW * (h / natH));
+  } else { // 'longer'
+    const targetW = Math.min(Math.round(cW * wf), Math.max(60, cW - PAD*2));
+    const targetH = Math.min(Math.round(cH * hf), Math.max(60, cH - PAD*2));
+    const longer = Math.min(targetW, targetH);
+    if (natW >= natH) { w = longer; h = Math.round(natH * (w / natW)); }
+    else { h = longer; w = Math.round(natW * (h / natH)); }
+  }
+  return { w, h };
+}
+
+/* 선반 패킹: stage 기준 */
+function shelfPack(stage, defs){
+  const sW = stage.clientWidth, sH = stage.clientHeight;
+  let x = 0, y = 0, rowH = 0;
+  const pos = [];
+  for (const def of defs){
+    const {w, h} = desiredSize(def, sW, sH);
+    if (x + w > sW) { x = 0; y += rowH + GAP; rowH = 0; }
+    pos.push({ left:x, top:y, width:w, height:h });
+    x += w + GAP;
+    rowH = Math.max(rowH, h);
+  }
+  return pos;
+}
+
+/* stage 전용 클램프 */
+function clampIntoStage(left, top, w, h, stage){
+  const maxL = stage.clientWidth  - w;
+  const maxT = stage.clientHeight - h;
+  return {
+    left: Math.min(Math.max(left, 0), Math.max(0, maxL)),
+    top:  Math.min(Math.max(top,  0), Math.max(0, maxT))
+  };
+}
+
+/* 드래그(좌표계: stage 패딩박스) */
+function enableDrag(el, stage, onDrop){
+  let dragging=false, startX=0, startY=0, startL=0, startT=0;
+
+  el.addEventListener("pointerdown", (e)=>{
+    dragging = true;
+    el.style.cursor="grabbing";
+    el.style.zIndex = 10;
+
+    startL = el.offsetLeft;  // stage 기준
+    startT = el.offsetTop;
+    startX = e.clientX;
+    startY = e.clientY;
+
+    el.setPointerCapture?.(e.pointerId);
+    e.preventDefault();
+  });
+
+  el.addEventListener("pointermove", (e)=>{
+    if(!dragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+
+    let nextL = startL + dx;
+    let nextT = startT + dy;
+
+    const maxL = stage.clientWidth  - w;
+    const maxT = stage.clientHeight - h;
+
+    if (nextL < 0) nextL = 0; else if (nextL > maxL) nextL = maxL;
+    if (nextT < 0) nextT = 0; else if (nextT > maxT) nextT = maxT;
+
+    el.style.left = Math.round(nextL) + "px";
+    el.style.top  = Math.round(nextT) + "px";
+  });
+
+  const finish = ()=>{
+    if(!dragging) return;
+    dragging = false;
+    el.style.cursor="grab";
+    el.style.zIndex = 1;
+    onDrop && onDrop(
+      parseInt(el.style.left || "0", 10),
+      parseInt(el.style.top  || "0", 10)
+    );
+  };
+  el.addEventListener("pointerup", finish);
+  el.addEventListener("pointercancel", finish);
+}
+
+/* ================= 페이지 로직 ================= */
+document.addEventListener("DOMContentLoaded", ()=>{
+  document.documentElement.style.overflow="hidden";
+  document.body.style.overflow="hidden";
+  document.querySelector(".app")?.style && (document.querySelector(".app").style.overflow="hidden");
+
+  const outEl = document.getElementById("resultOutput");
+
+  // 선택값 파싱(없으면 디폴트 한 세트)
+  const q = new URLSearchParams(location.search);
+  let sel = {
+    place:  q.get("place")  || "",
+    mood:   q.get("mood")   || "",
+    flow:   q.get("flow")   || "",
+    extras: q.get("extras") || "",
+    instruments: (q.get("instruments")||"").split(",").map(s=>s.trim()).filter(Boolean)
+  };
+  if (!sel.place && !sel.mood && !sel.flow && !sel.extras && (!sel.instruments || !sel.instruments.length)) {
+    sel = { place:"forest", mood:"classical", flow:"sit", extras:"tea", instruments:[] };
+  }
+
+  // 문장 + 캔버스 mount (+ stage 추가)
+  const sentenceHTML = `
+    <p style="margin:.5rem 0 1rem;color:#fff;font-size:1.1rem;">
+      <strong>${PHRASE.place[sel.place] || "어느 공간에서든"}</strong>
+      <strong>${PHRASE.mood[sel.mood] || "당신만의 무드로"}</strong>
+      <strong>${PHRASE.flow[sel.flow] || "편안한 방식으로"}</strong>
+      <strong>${PHRASE.extras[sel.extras] || "여운을 오래 간직하며"}</strong>
+      당신의 포르타토 공연을 즐깁니다.
+    </p>`;
+  const canvasId = "resultCanvas";
+  outEl.innerHTML = sentenceHTML + `
+    <div id="${canvasId}" style="
+        position:relative;margin:12px auto 18px;
+        border:1px dashed rgba(255,255,255,.18);
+        border-radius:12px;
+        overflow:hidden;
+        visibility:hidden;opacity:0;transition:opacity .12s ease;">
+      <div id="stage" style="position:absolute; inset:${CLAMP_PAD}px; overflow:hidden;"></div>
+    </div>`;
+
+  // 버튼 보강
+  const nav = document.querySelector(".result-section .nav");
+  if (nav && !document.getElementById('btnResetLayout')) {
+    const resetBtn=document.createElement('button');
+    resetBtn.type='button'; resetBtn.className='btn'; resetBtn.id='btnResetLayout';
+    resetBtn.textContent='배치 초기화';
+    nav.insertBefore(resetBtn, nav.lastElementChild);
+  }
+  const ARCHIVE_KEY="portato_archive_v1";
+  if (nav && !document.getElementById('btnSaveToArchive')) {
+    const saveBtn=document.createElement('button');
+    saveBtn.type='button'; saveBtn.className='btn'; saveBtn.id='btnSaveToArchive';
+    saveBtn.textContent='저장하고 아카이빙 보기';
+    nav.insertBefore(saveBtn, nav.lastElementChild);
+    saveBtn.addEventListener('click', async ()=>{
+      const entryId=await saveToArchiveAndGo();
+      location.href=`archive.html?id=${encodeURIComponent(entryId)}`;
+    });
+  }
+
+  // 캔버스 & 스테이지 참조
+  const canvas = document.getElementById(canvasId);
+  const stage  = document.getElementById("stage");
+  canvas.style.position = "relative";
+  canvas.style.boxSizing = "border-box";
+  canvas.style.overflow = "hidden";
+
+  function sizeCanvasPercent(){
+    const vw = Math.max(320, window.innerWidth  || 0);
+    const vh = Math.max(480, window.innerHeight || 0);
+    const w = Math.min(CANVAS_MAX_W, Math.round(vw * CANVAS_VW));
+    const h = Math.max(CANVAS_MIN_H, Math.round(vh * CANVAS_VH));
+    canvas.style.width  = w + 'px';
+    canvas.style.height = h + 'px';
+    // stage는 inset으로 자동 조절됨
+  }
+  sizeCanvasPercent();
+
+  // 선택 이미지 정의(+악기 표준화)
+  const defs=[];
+  const pushIf=(group,keyRaw)=>{
+    if(!keyRaw) return;
+    const key = (group==='instruments') ? (INSTR_ALIAS[keyRaw] || keyRaw) : keyRaw;
+    const src=IMG_MAP[group]?.[key];
+    if(src) defs.push({ key:`${group}:${key}`, group, src, natW:0, natH:0, el:null });
+  };
+  pushIf("place", sel.place);
+  pushIf("mood",  sel.mood);
+  pushIf("flow",  sel.flow);
+  pushIf("extras",sel.extras);
+  (sel.instruments||[]).forEach(n=>pushIf("instruments", n));
+
+  if(!defs.length){
+    outEl.insertAdjacentHTML("beforeend", `<p style="color:#fff;opacity:.85">표시할 이미지가 없습니다.</p>`);
+    return;
+  }
+
+  // 좌표 저장 로드
+  let savedPos={}; try{ savedPos=JSON.parse(localStorage.getItem(POS_KEY)||"{}"); }catch(e){ savedPos={}; }
+  localStorage.removeItem("portato_result_layout_visual"); // 과거키 정리
+
+  // 리사이즈
+  window.addEventListener('resize', ()=>{
+    if (!Array.isArray(defs) || defs.length === 0) return;
+    sizeCanvasPercent();
+    const sW = stage.clientWidth, sH = stage.clientHeight;
+    defs.forEach(def=>{
+      const {w,h} = desiredSize(def, sW, sH);
+      let left = parseInt(def.el.style.left||"0",10);
+      let top  = parseInt(def.el.style.top ||"0",10);
+      ({left, top} = clampIntoStage(left, top, w, h, stage));
+      setRect(def.el, left, top, w, h);
+    });
+    if (Object.keys(savedPos).length){
+      localStorage.setItem(POS_KEY, JSON.stringify(snapshotPositions(defs.map(d=>d.el))));
+    }
+  }, {passive:true});
+
+  // 이미지 로드
+  let remain = defs.length;
+  defs.forEach(def=>{
+    const img = new Image();
+    img.src = def.src; img.alt=""; img.draggable=false;
+    img.style.position="absolute"; img.style.margin="0"; img.style.cursor="grab";
+    img.style.userSelect="none"; img.style.touchAction="none"; img.style.objectFit="contain";
+    img.setAttribute("data-key", def.key);
+    def.el = img;
+
+    img.onload = ()=>{
+      def.natW=img.naturalWidth||800; def.natH=img.naturalHeight||600;
+      stage.appendChild(img);                 // ← stage에 추가
+      if(--remain===0) afterAllLoaded();
+    };
+    img.onerror = ()=>{
+      console.error("[PORTATO] 이미지 로드 실패:", def.src);
+      def.natW=800; def.natH=600;
+      stage.appendChild(img);                 // ← stage에 추가
+      if(--remain===0) afterAllLoaded();
+    };
+  });
+
+  function afterAllLoaded(){
+    const sW = stage.clientWidth, sH = stage.clientHeight;
+
+    // 선반 패킹(stage 기준)
+    const packed = shelfPack(stage, defs);
+
+    // 저장 좌표 우선 적용(없으면 선반 좌표), stage 클램프
+    defs.forEach((def,i)=>{
+      const {w,h} = desiredSize(def, sW, sH);
+      const sp = savedPos[def.key];
+      let left = sp ? sp.left : packed[i].left;
+      let top  = sp ? sp.top  : packed[i].top;
+      ({left, top} = clampIntoStage(left, top, w, h, stage));
+      setRect(def.el, left, top, w, h);
+
+      enableDrag(def.el, stage, (l,t)=>{
+        savedPos[def.key] = { left:l, top:t };
+        localStorage.setItem(POS_KEY, JSON.stringify(savedPos));
+      });
+    });
+
+    // 최초 스냅샷 저장
+    localStorage.setItem(POS_KEY, JSON.stringify(snapshotPositions(defs.map(d=>d.el))));
+
+    // 페이드 인
+    requestAnimationFrame(()=>{
+      canvas.style.visibility="visible";
+      canvas.style.opacity="1";
+    });
+  }
+
+  // 배치 초기화
+  document.getElementById("btnResetLayout")?.addEventListener("click", ()=>{
+    localStorage.removeItem(POS_KEY); savedPos={};
+    const packed = shelfPack(stage, defs);
+    defs.forEach((def,i)=>{
+      const {w,h} = desiredSize(def, stage.clientWidth, stage.clientHeight);
+      const p=packed[i];
+      const cl = clampIntoStage(p.left, p.top, w, h, stage);
+      setRect(def.el, cl.left, cl.top, w, h);
+    });
+    localStorage.setItem(POS_KEY, JSON.stringify(snapshotPositions(defs.map(d=>d.el))));
+  });
+
+  // 저장 → 아카이브 이동
+  async function saveToArchiveAndGo(){
+    const selNow = {
+      place:  q.get("place")  || sel.place,
+      mood:   q.get("mood")   || sel.mood,
+      flow:   q.get("flow")   || sel.flow,
+      extras: q.get("extras") || sel.extras,
+      instruments: (q.get("instruments") || sel.instruments.join(",")).split(",").map(s=>s.trim()).filter(Boolean)
+    };
+    const layoutNow = snapshotLayout(defs.map(d=>d.el));
+    const imgList   = defs.map(d=>({ key:d.key, src:d.src }));
+    const thumb     = await rasterizeCanvasToDataURL(canvas, stage, defs.map(d=>d.el));
+
+    const entry = { id:`arc_${Date.now()}`, t:Date.now(), sel:selNow,
+      box:{ w:canvas.clientWidth, h:canvas.clientHeight }, layout:layoutNow, images:imgList, thumb };
+    let arr=[]; try{ arr=JSON.parse(localStorage.getItem(ARCHIVE_KEY)||"[]"); }catch(e){}
+    arr.push(entry); localStorage.setItem(ARCHIVE_KEY, JSON.stringify(arr));
+    return entry.id;
+  }
+
+  // 스냅샷 (stage inset 보정)
+  function rasterizeCanvasToDataURL(canvas, stage, elems){
+    return new Promise(resolve=>{
+      const w=canvas.clientWidth, h=canvas.clientHeight;
+      const cvs=document.createElement("canvas"); cvs.width=w; cvs.height=h;
+      const ctx=cvs.getContext("2d");
+      (function drawSeq(i){
+        if(i>=elems.length){ resolve(cvs.toDataURL("image/png")); return; }
+        const el=elems[i];
+        // stage 기준 좌표 + stage inset(CLAMP_PAD) → canvas 좌표
+        const l=(parseInt(el.style.left||"0",10)||0) + CLAMP_PAD;
+        const t=(parseInt(el.style.top ||"0",10)||0) + CLAMP_PAD;
+        const W=el.offsetWidth, H=el.offsetHeight;
+        const im=new Image();
+        im.onload = ()=>{ try{ ctx.drawImage(im, l, t, W, H); }catch(e){}; drawSeq(i+1); };
+        im.onerror = ()=> drawSeq(i+1);
+        im.src=el.src;
+      })(0);
+    });
+  }
+});
+
+/* 다시 시작 */
+function restart(){
+  localStorage.removeItem("portatoSelections");
+  localStorage.removeItem("portato_result_layout_visual");
+  localStorage.removeItem("portato_result_layout_pos_v1");
+  window.location.href = "index.html";
+}
+</script>
+</body>
+</html>
